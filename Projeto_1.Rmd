@@ -1,0 +1,484 @@
+---
+title: "Untitled"
+author: "Lucas Rodrigues"
+date: "2024-06-14"
+output: html_document
+---
+
+
+# Descrição
+
+O conjunto de dados é amplo, oferecendo inúmeras oportunidades para uma análise detalhada. Os dados foram recolhidos em 10 shoppings diferentes em Istambul entre 2021 e 2023. As variáveis faixas etárias e gênero fornecer uma visão abrangente dos hábitos de compra e obter informações valiosas sobre os padrões de compra. O conjunto de dados contém as seguintes variáveis: números de faturas, IDs de clientes, idade, sexo, forma de pagamento, categorias de produtos, quantidade, preço, datas de pedidos e shoppings centers. 
+
+# Objetivo
+
+O objetivo pretendido da análise de dados é compreender e identificar as tendências no comportamento de compra do cliente, analisar quais produtos e métodos de pagamento são usados com mais frequência pelos clientes, qual a variação de venda por ano,  quais shoppings os clientes visitaram mais e como diferentes dados demográficos dos clientes entram em jogo enquanto eles comprar. A extração dessas informações pode ajudar a tomar decisões baseadas em dados, aprimorar a experiência do cliente, avaliar possíveis ofertas de produtos e melhorar áreas de oportunidades.
+
+# carregando os pacotes
+```{r}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(DescTools)
+```
+
+# Carregando a base de dados
+```{r}
+dados <- read_csv("Compras de clientes/customer_shopping_data.csv")
+attach(dados)
+
+```
+
+## Vizualização das 6 primeiras linhas
+## Vizualização das 6 últimas linhas
+
+```{r}
+head(dados)
+
+tail(dados)
+```
+
+## Dimensão dos dados
+```{r}
+dim(dados)
+```
+
+```{r}
+## Visão geral dos dados
+glimpse(dados)
+
+```
+
+Os dados originais totalizam 99.457 clientes e 10 colunas com variáveis qualitativas e quantitativas.
+
+# Pré-processamento dos dados
+
+Dados de pré-processamento: reformate a data e agrupe a idade dos clientes em 10 (<20 anos), 20 (20 a 30 anos), 30 (30 a 40 anos), 40 (40 a 50 anos), o restante é 60
+
+## Renomeando as colunas
+```{r}
+dados <- dados %>% rename(fatura = invoice_no, id_cliente = customer_id,
+                          genero = gender,idade = age, categoria = category,
+                          quantidade = quantity, preco = price,
+                          pagamento = payment_method, data_pedidos = invoice_date,
+                          shopping = shopping_mall)
+attach(dados)
+colnames(dados)
+
+```
+
+## Transformando a variável genero em fator 
+```{r}
+
+dados$genero <- factor(genero, labels = c("Feminino","Masculino"))
+
+```
+
+## Transformando a variável pagamento em fator 
+```{r}
+
+dados$pagamento <- factor(pagamento,levels=c("Credit Card","Debit Card","Cash"),
+                           labels = c("Credito","Debito","Dinheiro"))
+```
+
+## Transformando a variável data dos pedidos no formato data  
+```{r}
+dados$data_pedidos <- as.Date(data_pedidos, format = "%d/%m/%Y")
+```
+
+## Seperando por Ano, Mês e dia
+```{r}
+dados <- dados %>%
+  mutate(
+    ano = year(data_pedidos),
+    mes = month(data_pedidos),
+    dia = day(data_pedidos))
+
+attach(dados)
+```
+
+## Composição mensal do ano de 2023 
+```{r}
+unique(dados[ano == 2023, ]$mes)
+```
+
+
+## Fitrar os anos 2021 e 2022
+```{r}
+dados <- dados %>%
+  filter(ano %in% c(2021, 2022))
+```
+
+Como só foi coletado dados do primeiro trimestre de 2023, será analisado apenas os anos de 2021 e 2022 
+
+# Conversão para BRL
+```{r}
+dados<- dados %>%
+  mutate(total_real = round(preco * 0.017, 2))
+```
+
+O preço do produto por unidade na moeda Liras Turcas foi convertido para Reais considerando a contação atual
+
+
+## Criando a variável total considerando o preço e quantidade
+```{r}
+dados <- dados %>% mutate(total_real = preco*quantidade)
+```
+
+
+## Criando a variável idade por grupo com intervalo de 10 anos 
+```{r}
+dados <- dados %>%
+  mutate(idade_grupo = case_when(
+    idade < 20 ~ "<20",
+    idade < 30 ~ "20-29",
+    idade < 40 ~ "30-39",
+    idade < 50 ~ "40-49",
+    idade < 60 ~ "50-59",
+    TRUE ~ "60>"
+  ))
+```
+  
+
+# Selecionando as variáveis e removendo fatura e id_cliente
+```{r}
+dados <- dados %>% select(shopping,data_pedidos, genero,
+                          idade, idade_grupo, categoria, quantidade, preco, total_real,
+                          pagamento, ano, mes, dia)
+attach(dados)
+```
+
+
+# Análise estatística descritiva preliminar
+
+## Resumo das variáveis numericas
+```{r}
+summary(dados[, c("idade", "quantidade", "total_real")])
+```
+
+## Resumo das variáveis categoricas
+```{r}
+sapply(dados[, c("shopping", "genero", "categoria", "pagamento", "idade_grupo")], function(x) length(unique(x)))
+```
+
+
+## Tabelas de frequencias para verificar distribuição das variáveis categoricas
+```{r}
+table(shopping)
+
+table(genero)
+
+table(categoria)
+
+table(pagamento)
+
+table(idade_grupo)
+```
+
+
+
+## Médidas da variável preço
+
+## Calculando faixa do preço
+```{r}
+faixa_preco <- range(preco, na.rm = TRUE)
+cat("faixa_preco: ", faixa_preco[1], " - ", faixa_preco[2])
+```
+
+## Calculando o desvio padrão
+```{r}
+preco_sd <- sd(preco, na.rm = TRUE)
+cat("Desvio padrão do preço: ", preco_sd)
+```
+
+## Calculando a variação do preço
+```{r}
+preco_var <- var(preco, na.rm = TRUE)
+cat("Variação do preço: ", preco_var)
+```
+
+## Calculando faixa interquartil do preço
+```{r}
+preco_iqr <- IQR(preco, na.rm = TRUE)
+cat("Intervalo interqual do preço: ", preco_iqr)
+```
+
+# Análises gráficas
+
+## Porcentagem de clientes
+```{r}
+frequencia_tabela1 <- dados %>%
+  count(genero) %>%
+  mutate(porcentagem = n / sum(n) * 100)
+```
+
+
+## Distribuição de clientes por genero
+```{r}
+ggplot(frequencia_tabela1, aes(x = "", y = porcentagem, fill = genero)) +
+  geom_bar(stat = "identity", width = 1, color = "white" ,
+           position = position_stack(vjust = 0.5)) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(round(porcentagem, 1), "%")), 
+            position = position_stack(vjust = 0.5), color = "white") +
+  scale_fill_manual(values = c("#FA5858","#5858FA"), name = "Gênero")+
+  ggtitle("Gráfico de pizza para Genero") + labs(fill= "Genero") +
+  theme_void()
+```
+
+Em Istambul as mulheres têm uma tendência de compra mais forte do que os homens. Isto pode vir de jovens e mulheres casadas que vão às compras para toda a família.
+
+
+## Histograma da distribuição por categoria
+```{r}
+ggplot(data = dados, mapping = aes(x = categoria, fill = genero)) +
+  geom_histogram(binwidth = 5, stat = "count", position = position_dodge(0.4)) +
+  xlab("Categorias") +
+  ylab("Frequências") +
+  ggtitle("") +
+  scale_fill_manual(values = c("#FA5858","#5858FA"), name = "Gênero") +
+  theme_classic() +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 7, angle = 20))
+```
+
+Como visto graficamente as mulheres é quem vai as compras com maior frequência comparado aos homens. Além disso, vestuário é a categoria mais vendida, seguida dos cosméticos e alimentos e bebidas. Tirando estes destaques, no geral, o padrão de distribuição dos gêneros entre categorias é praticamente o mesmo.
+
+## Gráfico barras apresentando os métodos de pagamentos
+```{r}
+ggplot(data = dados, mapping = aes(x = factor(pagamento), y = ..count..)) +
+  geom_bar(fill = '#DF7401', col = 'black') +
+  xlab("Metodo Pagamento") +
+  ylab("Quantidade") +
+  ggtitle("Quantidade e metodos de pagamentos") +
+theme_classic() +
+  theme(plot.title = element_text(face = 'bold', size = 10, hjust = .5),
+        axis.title = element_text(face = 'italic'),
+        axis.text = element_text(face = 'bold', size = 7, angle = 20))
+```
+
+Mesmo com toda digitalização, o dinheiro segue ainda sendo o principal método de pagamento, com maior utilização tanto em número de clientes quanto em valor de vendas.
+
+## Dados apenas do ano de 2021
+```{r}
+vendas_mes_2021 <- dados[ano == 2021, ]
+```
+
+
+## Calcular a soma do preço total por mes
+```{r}
+vendas_mes_2021 <- vendas_mes_2021 %>%
+  group_by(mes,ano) %>%
+  summarise(total_real = sum(total_real))
+
+vendas_mes_2021
+```
+
+Podemos observar que o mês mais rentável no ano de 2021 é outubro. O lucro total de todo o shopping em Istambul é de 636.889 $.
+
+## Gráfico de demonstração do resultado anual
+```{r}
+ggplot(vendas_mes_2021, aes(x = mes, y = total_real)) +
+  geom_line(size=1) +
+  labs(title = "Vendas por Mês em 2021", x = "Mês", y = "Total de Vendas")+
+  scale_x_continuous(breaks = 1:12)+
+  scale_y_continuous(labels = scales::comma_format())
+```
+
+
+## Dados apenas do ano de 2022
+```{r}
+vendas_mes__2022 <- dados[ano == 2022, ]
+```
+
+
+## Calcular a soma do preço total por mes
+```{r}
+vendas_mes_2022 <- vendas_mes__2022 %>%
+  group_by(mes,ano) %>%
+  summarise(total_real = sum(total_real))
+
+vendas_mes_2022
+```
+
+Podemos observar que o mês mais rentável no ano de 2021 é outubro. O lucro total de todo o shopping em Istambul é de 636.889 $.
+
+## Gráfico de demonstração do resultado anual
+```{r}
+ggplot(vendas_mes_2022, aes(x = mes, y = total_real)) +
+  geom_line(size=1) +
+  labs(title = "Vendas por Mês em 2022", x = "Mês", y = "Total de Vendas")+
+  scale_x_continuous(breaks = 1:12)+
+  scale_y_continuous(labels = scales::comma_format())
+```
+
+
+# Combinando as tabelas
+```{r}
+vendas_total <- rbind(vendas_mes_2021, vendas_mes_2022)
+```
+
+# Gráfico do comportamento dos anos de 2021 e 2022
+```{r}
+ggplot(vendas_total, aes(x = mes, y = total_real, color = factor(ano))) +
+  geom_line(size=2) +
+  labs(title = "Vendas por Mês em 2021 e 2022", x = "Mês", y = "Total de Vendas", color = "Ano") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(labels = scales::comma_format()) +
+  scale_color_manual(values = c("#66CDAA", "#D2B48C"), labels = c("2021", "2022")) 
+```
+
+Como podemos observar 3 shoppings (Emaar Square Mall, Kanyon, Metropol AVM) tiveram queda em suas vendas totais em 2022 em relação ao ano anterior.
+
+## Agrupar por shopping e ano
+```{r}
+data_shop_ano <- dados %>%
+  group_by(shopping, ano)
+```
+
+## Calcular a soma do preço total
+```{r}
+venda_total_shop_ano <- data_shop_ano %>%
+  summarise(total_real = sum(total_real))
+```
+
+## Filtrar por anos 2022 e 2021
+```{r}
+dados_2021_2022 <- venda_total_shop_ano %>%
+  filter(ano %in% c(2021, 2022))
+```
+
+## Tabela com com vendas total de cada shopping por ano
+```{r}
+
+dados_2021_2022 <- dados_2021_2022 %>%
+  mutate(total_real = round(total_real, 2))
+
+dados_2021_2022
+
+```
+
+Como podemos observar 3 shoppings (Emaar Square Mall, Kanyon, Metropol AVM) tiveram queda em suas vendas totais em 2022 em relação ao ano anterior.
+
+
+## Ranking de shopping centers por total de vendas em R$
+```{r}
+shopping_vector <- dados %>% group_by(shopping) %>% 
+  summarise(cliente = n(), total_real = sum(total_real/1000), .groups = "drop") %>%
+  arrange(total_real %>% desc())
+shopping_vector %>% 
+  ggplot() + 
+  geom_col(aes(reorder(shopping, total_real), total_real), 
+           fill = '#DF7401', col = 'black', alpha = .6,width = .7) +
+  coord_flip() + 
+  labs(title = 'Ranking de shopping centers', subtitle = '1 = R$1.000') + ylab('Total de vendas em R$') +
+  xlab('') +
+  theme(plot.title = element_text(size = 10, face = 'bold', hjust = .5),
+        axis.title.y = element_text(face = 'bold'),
+        axis.text.y = element_text(face = 'bold', size = 7),
+        axis.title.x = element_text(face = 'italic', size = 7),
+        axis.text.x = element_text(face = 'bold'))
+
+```
+
+O conjunto de dados foi coletado em 10 shoppings em Istambul. Entre estes, Mall of Istanbul e Kanyon são os dois shoppings com maior tráfego, refletindo 19.943 registros e 19.823 registros, respectivamente. São 4 shoppings em cada 10 que registraram mais de 10.000 clientes, representando os 4 shoppings de maior destaque nesta cidade, enquanto a outra faixa de tráfego está entre 4.800 e 10.000 clientes.
+
+
+# Agrupando a soma da quantidade por shopping
+```{r}
+pivot_table <- dados %>%
+  group_by(shopping, categoria) %>%
+  summarize(quantidade = sum(quantidade))
+```
+
+
+# Mapa de calor com ggplot
+```{r}
+ggplot(pivot_table, aes(x = categoria, y = shopping, fill = quantidade, label = quantidade)) +
+  geom_tile(color = "white") +  # Defina a cor do azulejo
+  geom_text(color = "black", size = 3) +  # Adicione os valores
+  scale_fill_gradient(name = "Quantidade", low = min(pivot_table$quantidade), high = max(pivot_table$quantidade)) +  # Defina a escala de cores
+  theme_bw() +  # Defina o tema em preto e branco
+  labs(title = "Frequência de Categorias de Produto por Shopping", x = "Categoria", y = "Shopping") +  # Adicione rótulos
+  theme(plot.title = element_text(size = 10, face = 'bold', hjust = .5),
+        axis.title.y = element_text(face = 'bold'),
+        axis.text.y = element_text(face = 'bold', size = 7),
+        axis.title.x = element_text(face = 'italic', size = 7),
+        axis.text.x = element_text(face = 'bold'))
+```
+
+
+
+## Porcentagem da contagem da idade por grupo
+```{r}
+frequencia_tabela2 <- dados %>%
+  count(idade_grupo) %>%
+  mutate(porcentagem= n / sum(n) * 100) 
+```
+
+
+## Gráfico de barras da porcentagem da distribuição por grupo de idade
+```{r}
+ggplot(frequencia_tabela2, aes(x = idade_grupo, y = porcentagem, fill = idade_grupo)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_text(aes(label = paste0(round(porcentagem, 1), "%")), vjust = -0.5, color = "black", size = 3) +
+  ggtitle("Porcentagem da distribuição por grupo de idade") +
+  xlab("") +
+  ylab("Porcentagem") +
+  theme_minimal()
+```
+
+Com exceção do segmento dos anos 10 (idade inferior a 20 anos), cada faixa etária partilhava quase a mesma proporção com 19% por segmento, mas o segmento dos anos 20 aos 30, igualmente para clientes com idades compreendidas entre os 20 e os 40 anos, tem um percentual um pouco maior (19,4% cada), indicando que são os principais clientes dos shopping centers.
+
+## Porcentagem da contagem da categoria
+```{r}
+frequencia_tabela3 <- dados %>%
+  count(categoria) %>%
+  mutate(porcentagem = n / sum(n) * 100)
+```
+
+
+## Gráfico de barras da porcentagem de vendas por categorias
+```{r}
+ggplot(frequencia_tabela3, aes(x = categoria, y = porcentagem, fill = categoria)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_text(aes(label = paste0(round(porcentagem, 1), "%")), vjust = -0.5, color = "black", size = 3) +
+  ggtitle("Porcentagem de vendas por categorias") +
+  xlab("") +
+  ylab("Porcentagem") +
+  theme_minimal()
+```
+
+Conforme analisado acima, Vestuário é a categoria mais elevada em Unidades de Compra com 34,7%, seguida por Cosméticos (15,2%) e Alimentos e Bebidas (14,9%). Calçados e Brinquedos representaram 10,1%, enquanto as demais categorias dividiram 5% cada.
+
+## Porcentagem da contagem por Localização do Shopping
+```{r}
+frequencia_tabela4 <- dados %>%
+  count(shopping) %>%
+  mutate(porcentagem = n / sum(n) * 100)
+```
+
+
+## Gráfico de barras da porcentagem de vendas por Shopping
+```{r}
+ggplot(frequencia_tabela4, aes(x = shopping, y = porcentagem, fill = shopping)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_text(aes(label = paste0(round(porcentagem, 1), "%")), vjust = -0.5, color = "black", size = 3) +
+  ggtitle("Porcentagem de vendas por Shopping") +
+  xlab("Shopping") +
+  ylab("Porcentagem") +
+  theme_minimal() 
+```
+
+Conforme mencionado acima, o Mall of Istanbul e o Kanyon são os dois que apresentam maior tráfego de compras, com 20,1% e 19,9%, respectivamente. Entre os 10 shoppings, Mall of Istanbul, Kanyon e Metrocity são os principais players no negócio de varejo, com um índice de composição acumulada de mais de 50%. Em comparação, os demais 7 shoppings competem com posições menores no setor.
+
+
+Podemos ver para ambos os anos que:
+
+Mall of Istabul e Kanyon têm as vendas mais altas.
+A maioria das pessoas prefere dinheiro como forma de pagamento.
+O dia menos preferido para fazer compras é o último dia do mês (31) e o mais preferido é 16 e 29. Mas não há tantas diferenças nos dias em que os clientes compram seus produtos.
+Em fevereiro os clientes não fazem compras. Mas em julho e outubro podemos observar uma ação muito boa.
+As mulheres gastam muito mais que os homens.
